@@ -3,26 +3,29 @@ import Header from "./components/Header";
 import AddTaskForm from "./components/AddTaskForm";
 import TaskList from "./components/TaskList";
 import Spinner from "./components/Spinner";
+import toast from 'react-hot-toast';
 
 function App() {
   const [tasks, setTasks] = useState([]);
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(true);
 
-  // Initialize tasks with localStorage or default values
+  // Fetch tasks from backend API
   useEffect(() => {
-    const fetchInitialTasks = () => {
+    const fetchInitialTasks = async () => {
       try {
-        const savedTasks = localStorage.getItem("tasks");
-        if (savedTasks) {
-          setTasks(JSON.parse(savedTasks));
-        } else {
-          // Default tasks if nothing in localStorage
-          setTasks([
-            { id: 1, text: "Learn React", completed: false },
-            { id: 2, text: "Build a Task Tracker", completed: true }
-          ]);
-        }
+        const response = await fetch("http://localhost:3000/api/v1/tasks");
+        const data = await response.json();
+        
+        // Transform backend data to match frontend structure
+        const formattedTasks = data.map(task => ({
+          id: task.id,
+          text: task.title || task.text,
+          completed: task.completed || false,
+          createdAt: task.createdAt || new Date().toISOString()
+        }));
+        
+        setTasks(formattedTasks);
       } catch (error) {
         console.error("Error loading tasks:", error);
         setTasks([]);
@@ -34,9 +37,24 @@ function App() {
     fetchInitialTasks();
   }, []);
 
-  // Save tasks to localStorage whenever they change
+  // Save tasks to backend API
+  const syncTasksToBackend = async (updatedTasks) => {
+    try {
+      await fetch("http://localhost:3000/api/v1/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedTasks),
+      });
+    } catch (error) {
+      console.error("Error syncing tasks:", error);
+    }
+  };
+
+  // Sync tasks when they change
   useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(tasks));
+    if (tasks.length > 0) {
+      syncTasksToBackend(tasks);
+    }
   }, [tasks]);
 
   // Filter tasks based on current filter
@@ -46,26 +64,69 @@ function App() {
     return true;
   });
 
-  const addTask = (text) => {
-    const newTask = {
-      id: Date.now(),
-      text,
-      completed: false,
-      createdAt: new Date().toISOString()
-    };
-    setTasks([...tasks, newTask]);
+  // Add new task
+  const addTask = async (text) => {
+    try {
+      const response = await fetch("http://localhost:3000/api/v1/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          title: text,
+          completed: false 
+        }),
+      });
+      const newTask = await response.json();
+      
+      const formattedTask = {
+        id: newTask.id,
+        text: newTask.title || text,
+        completed: newTask.completed || false,
+        createdAt: newTask.createdAt || new Date().toISOString()
+      };
+      
+      setTasks([...tasks, formattedTask]);
+      toast.success('Task added!');
+    } catch (error) {
+      console.error("Error adding task:", error);
+      toast.error('Failed to add task');
+    }
   };
 
-  const deleteTask = (id) => {
-    setTasks(tasks.filter((task) => task.id !== id));
+  // Delete task
+  const deleteTask = async (id) => {
+    try {
+      await fetch(`http://localhost:3000/api/v1/tasks/${id}`, {
+        method: "DELETE",
+      });
+      setTasks(tasks.filter((task) => task.id !== id));
+      toast.success('Task deleted!');
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      toast.error('Failed to delete task');
+    }
   };
 
-  const toggleComplete = (id) => {
-    setTasks(
-      tasks.map((task) =>
-        task.id === id ? { ...task, completed: !task.completed } : task
-      )
-    );
+  // Toggle task completion
+  const toggleComplete = async (id) => {
+    try {
+      const taskToUpdate = tasks.find((task) => task.id === id);
+      await fetch(`http://localhost:3000/api/v1/tasks/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          completed: !taskToUpdate.completed 
+        }),
+      });
+      setTasks(
+        tasks.map((task) =>
+          task.id === id ? { ...task, completed: !task.completed } : task
+        )
+      );
+      toast.success('Task updated!');
+    } catch (error) {
+      console.error("Error updating task:", error);
+      toast.error('Failed to update task');
+    }
   };
 
   return (
