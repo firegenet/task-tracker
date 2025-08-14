@@ -36,3 +36,19 @@
     transform: rotate(360deg);
   }
 }
+/* Add to your App.css or index.css */
+.task-list {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6b7280;
+  font-size: 1.1rem;
+  border: 1px dashed #e5e7eb;
+  border-radius: 8px;
+  background-color: #f9fafb;
+}

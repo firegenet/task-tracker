@@ -1,184 +1,153 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import 'react-toastify/dist/ReactToastify.css';
+import Login from './Login';
+import Register from './Register';
 import Header from "./components/Header";
 import AddTaskForm from "./components/AddTaskForm";
 import TaskList from "./components/TaskList";
 import Spinner from "./components/Spinner";
-import toast from 'react-hot-toast';
+import { getTasks, deleteTask, toggleTaskCompletion, addTask } from "./api";
 
-function App() {
+// ✅ Updated TaskApp only
+function TaskApp({ onLogout }) {
   const [tasks, setTasks] = useState([]);
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
 
-  // Fetch tasks from backend API
   useEffect(() => {
-    const fetchInitialTasks = async () => {
+    const fetchTasks = async () => {
+      setLoading(true);
       try {
-        const response = await fetch("http://localhost:3000/api/v1/tasks");
-        const data = await response.json();
-        
-        // Transform backend data to match frontend structure
-        const formattedTasks = data.map(task => ({
-          id: task.id,
-          text: task.title || task.text,
-          completed: task.completed || false,
-          createdAt: task.createdAt || new Date().toISOString()
-        }));
-        
-        setTasks(formattedTasks);
+        const data = await getTasks();
+        setTasks(
+          data.map((task) => ({
+            id: task.id,
+            text: task.text,
+            completed: task.completed === 1 || task.completed === true,
+            createdAt: task.created_at,
+            description: task.description || "",
+          }))
+        );
       } catch (error) {
-        console.error("Error loading tasks:", error);
+        console.error("Error fetching tasks:", error);
         setTasks([]);
       } finally {
         setLoading(false);
       }
     };
-
-    fetchInitialTasks();
+    fetchTasks();
   }, []);
 
-  // Save tasks to backend API
-  const syncTasksToBackend = async (updatedTasks) => {
+  const handleAddTask = async (text, description = "") => {
+    if (!text.trim()) {
+      toast.error("Task cannot be empty");
+      return;
+    }
     try {
-      await fetch("http://localhost:3000/api/v1/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedTasks),
-      });
+      const newTask = await addTask({ text, description, completed: false });
+      setTasks([...tasks, {
+        id: newTask.id,
+        text: newTask.text,
+        completed: newTask.completed === 1 || newTask.completed === true,
+        createdAt: newTask.created_at || new Date().toISOString(),
+        description: newTask.description || "",
+      }]);
+      toast.success("Task added!");
     } catch (error) {
-      console.error("Error syncing tasks:", error);
+      toast.error("Failed to add task");
     }
   };
 
-  // Sync tasks when they change
-  useEffect(() => {
-    if (tasks.length > 0) {
-      syncTasksToBackend(tasks);
-    }
-  }, [tasks]);
+ const handleDeleteTask = async (id) => {
+  try {
+    await deleteTask(id); // calls API
+    setTasks(tasks.filter((task) => task.id !== id)); // removes from state
+    toast.success("Task deleted!");
+  } catch (error) {
+    toast.error("Failed to delete task");
+    console.error(error);
+  }
+};
 
-  // Filter tasks based on current filter
-  const filteredTasks = tasks.filter(task => {
+
+  const handleToggleComplete = async (id) => {
+    try {
+      const taskToUpdate = tasks.find((task) => task.id === id);
+      if (!taskToUpdate) return;
+      await toggleTaskCompletion(id, !taskToUpdate.completed);
+      setTasks(tasks.map((task) => task.id === id ? { ...task, completed: !task.completed } : task));
+      toast.success("Task updated!");
+    } catch (error) {
+      toast.error("Failed to update task");
+    }
+  };
+
+  const filteredTasks = tasks.filter((task) => {
     if (filter === "completed") return task.completed;
     if (filter === "active") return !task.completed;
     return true;
   });
 
-  // Add new task
-  const addTask = async (text) => {
-    try {
-      const response = await fetch("http://localhost:3000/api/v1/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          title: text,
-          completed: false 
-        }),
-      });
-      const newTask = await response.json();
-      
-      const formattedTask = {
-        id: newTask.id,
-        text: newTask.title || text,
-        completed: newTask.completed || false,
-        createdAt: newTask.createdAt || new Date().toISOString()
-      };
-      
-      setTasks([...tasks, formattedTask]);
-      toast.success('Task added!');
-    } catch (error) {
-      console.error("Error adding task:", error);
-      toast.error('Failed to add task');
-    }
-  };
-
-  // Delete task
-  const deleteTask = async (id) => {
-    try {
-      await fetch(`http://localhost:3000/api/v1/tasks/${id}`, {
-        method: "DELETE",
-      });
-      setTasks(tasks.filter((task) => task.id !== id));
-      toast.success('Task deleted!');
-    } catch (error) {
-      console.error("Error deleting task:", error);
-      toast.error('Failed to delete task');
-    }
-  };
-
-  // Toggle task completion
-  const toggleComplete = async (id) => {
-    try {
-      const taskToUpdate = tasks.find((task) => task.id === id);
-      await fetch(`http://localhost:3000/api/v1/tasks/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          completed: !taskToUpdate.completed 
-        }),
-      });
-      setTasks(
-        tasks.map((task) =>
-          task.id === id ? { ...task, completed: !task.completed } : task
-        )
-      );
-      toast.success('Task updated!');
-    } catch (error) {
-      console.error("Error updating task:", error);
-      toast.error('Failed to update task');
-    }
-  };
-
+  // ✅ Fixed return with small logout button
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+    <div className={`relative min-h-screen flex flex-col ${darkMode ? "bg-gray-900 text-white" : "bg-gray-50 text-black"}` }>
+      {/* Logout button in top-right corner */}
+      <div className="absolute top-4 right-4">
+        <button
+          onClick={() => {
+            localStorage.removeItem("token");
+            onLogout();
+          }}
+          className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 transition"
+        >
+          Logout
+        </button>
+      </div>
+      <div className="absolute top-4 right-24 flex items-center gap-2">
+  <button
+    onClick={() => setDarkMode(!darkMode)}
+    className="px-3 py-1 text-sm bg-gray-800 text-white rounded hover:bg-gray-700 transition"
+  >
+    {darkMode ? "🌞 Light" : "🌙 Dark"}
+  </button>
+</div>
+
+
+      {/* Header */}
       <Header />
-      <main className="container mx-auto px-4 py-8 max-w-2xl">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 transition-colors duration-200">
-          <AddTaskForm onAddTask={addTask} />
-          
-          {/* Filter Buttons */}
-          <div className="flex gap-2 mb-4">
-            <button 
-              onClick={() => setFilter("all")} 
-              className={`px-3 py-1 rounded ${
-                filter === "all" 
-                  ? "bg-blue-500 text-white" 
-                  : "bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-              }`}
-            >
-              All
-            </button>
-            <button 
-              onClick={() => setFilter("active")}
-              className={`px-3 py-1 rounded ${
-                filter === "active" 
-                  ? "bg-blue-500 text-white" 
-                  : "bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-              }`}
-            >
-              Active
-            </button>
-            <button 
-              onClick={() => setFilter("completed")}
-              className={`px-3 py-1 rounded ${
-                filter === "completed" 
-                  ? "bg-blue-500 text-white" 
-                  : "bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-              }`}
-            >
-              Completed
-            </button>
+
+      {/* Main Content */}
+      <main className="flex-grow container mx-auto px-4 py-8 max-w-2xl w-full">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 w-full">
+          <AddTaskForm onAddTask={handleAddTask} />
+
+          {/* Filter buttons */}
+          <div className="flex flex-wrap gap-2 mb-4 justify-center sm:justify-start">
+            {["all", "active", "completed"].map((type) => (
+              <button
+                key={type}
+                onClick={() => setFilter(type)}
+                className={`px-4 py-1 rounded-full font-medium ${
+                  filter === type
+                    ? "bg-blue-500 text-white"
+                    : "bg-gray-200 dark:bg-gray-700 dark:text-gray-200"
+                }`}
+              >
+                {type.charAt(0).toUpperCase() + type.slice(1)}
+              </button>
+            ))}
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-8">
-              <Spinner />
-            </div>
+            <Spinner />
           ) : (
             <TaskList
               tasks={filteredTasks}
-              onDeleteTask={deleteTask}
-              onToggleComplete={toggleComplete}
+              onDeleteTask={handleDeleteTask}
+              onToggleComplete={handleToggleComplete}
             />
           )}
         </div>
@@ -187,4 +156,31 @@ function App() {
   );
 }
 
-export default App;
+// ❌ Rest of App.js unchanged
+export default function App() {
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) setUser({ token });
+  }, []);
+
+  return (
+    <Router>
+      <Routes>
+        <Route
+          path="/"
+          element={user ? <Navigate to="/tasks" /> : <Login onLoginSuccess={setUser} />}
+        />
+        <Route
+          path="/register"
+          element={user ? <Navigate to="/tasks" /> : <Register onRegisterSuccess={() => toast.success("Registered! Please login.")} />}
+        />
+        <Route
+          path="/tasks"
+          element={user ? <TaskApp onLogout={() => setUser(null)} /> : <Navigate to="/" />}
+        />
+      </Routes>
+    </Router>
+  );
+}

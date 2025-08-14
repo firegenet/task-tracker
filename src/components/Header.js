@@ -13,12 +13,7 @@ export default function Header() {
         <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
           Task Tracker
         </h1>
-        <button
-          onClick={() => setDarkMode(!darkMode)}
-          className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-        >
-          {darkMode ? "☀️ Light" : "🌙 Dark"}
-        </button>
+        
       </div>
     </header>
   );
